@@ -9,7 +9,7 @@ Original PyTorch implementation of **GraphIRL** from
 
 <p align="center">
   <br><img src='media/preview.gif' width="600"/><br>
-   <a href="https://arxiv.org/abs/2207.14299">[Paper]</a>&emsp;<a href="https://sateeshkumar21.github.io/GraphIRL">[Website]</a>
+   <a href="https://arxiv.org/abs/2207.14299">[Paper]</a>&emsp;<a href="https://sateeshkumar21.github.io/GraphIRL">[Website]</a>&emsp;<a href="https://youtu.be/hDxhmcwMFto">[Video]</a>&emsp;<a href="https://github.com/SateeshKumar21/graph-inverse-rl">[Dataset]</a>
 </p>
 
 
