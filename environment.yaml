@@ -1,0 +1,28 @@
+name: graphirl
+channels:
+  - defaults
+  - pytorch
+dependencies:
+  - python=3.8
+  - pytorch=1.7.1
+  - torchvision=0.8.2
+  - cudatoolkit=11.0
+  - pip
+  - pip:
+    - albumentations==0.5.2
+    - gym==0.17.*
+    - pymunk==5.6.0
+    - ml-collections==0.1.0
+    - scikit-learn==0.24.1
+    - tensorflow-cpu==2.6.0
+    - imageio
+    - imageio-ffmpeg
+    - tqdm
+    - absl-py
+    - numpy
+    - scipy
+    - pandas
+    - gdown==4.4.0
+    - protobuf~=3.19.0
+    - wandb
+    - natsort
