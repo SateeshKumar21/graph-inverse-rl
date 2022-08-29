@@ -51,6 +51,6 @@ After installing dependencies, you can learn a GraphIRL Reward Function by runni
 bash scripts/train_graphirl.sh
 ```
 
-# License & Acknowledgements
+##  License & Acknowledgements
 
 GraphIRL is licensed under the MIT license. [MuJoCo](https://github.com/deepmind/mujoco) is licensed under the Apache 2.0 license. We thank the [XIRL](https://x-irl.github.io/) authors for open-sourcing their codebase to the community, our work is built on top of their engineering efforts.
