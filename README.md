@@ -45,10 +45,11 @@ conda activate graphirl
 bash scripts/install_env.sh
 ```
 
-After installing dependencies, you can learn a GraphIRL Reward Function by running:
+After installing dependencies, you can learn a reward function and train a policy by running:
 
 ```
-bash scripts/train_graphirl.sh
+bash scripts/train_reward.sh
+bash scripts/train_policy.sh
 ```
 
 ##  License & Acknowledgements
