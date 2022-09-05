@@ -2,4 +2,5 @@ src/base_configs
 src/configs
 src/torchkit
 src/x-magical-diverse
+src/graphirl
 logs/
