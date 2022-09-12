@@ -1,6 +1,6 @@
 # Graph Inverse Reinforcement Learning
 
-Original PyTorch implementation of **GraphIRL** from
+(In-Progress) Original PyTorch implementation of **GraphIRL** from
 
 [Graph Inverse Reinforcement Learning from Diverse Videos](https://arxiv.org/abs/2207.14299) by
 
