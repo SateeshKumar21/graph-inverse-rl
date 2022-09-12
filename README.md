@@ -6,6 +6,7 @@ Original PyTorch implementation of **GraphIRL** from
 
 [Sateesh Kumar](https://sateeshkumar21.github.io/), [Jonathan Zamora](https://jonzamora.dev/)\*, [Nicklas Hansen](https://nicklashansen.github.io/)\*, [Rishabh Jangir](https://jangirrishabh.github.io/), [Xiaolong Wang](https://xiaolonw.github.io/)
 
+Conference on Robot Learning (CoRL), 2022 **(Oral, Top 6.5%)**
 
 <p align="center">
   <br><img src='media/preview.gif' width="600"/><br>
