@@ -1,330 +1,226 @@
-# coding=utf-8
-# Copyright 2022 The Google Research Authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-"""Useful methods shared by all scripts."""
-
-import os
-import pickle
-import shutil
-
-from absl import logging
-import gym
-from gym.wrappers import RescaleAction
-import matplotlib.pyplot as plt
-from ml_collections import config_dict
-import numpy as np
-from sac import replay_buffer
-from sac import wrappers
 import torch
-from torchkit.torchkit.checkpoint import CheckpointManager
-from torchkit.experiment import git_revision_hash
-from graphirl import common
-import xmagical
-import yaml
-import math
-import wandb
-import time
-
-# pylint: disable=logging-fstring-interpolation
-
-ConfigDict = config_dict.ConfigDict
-FrozenConfigDict = config_dict.FrozenConfigDict
-
-# ========================================= #
-# Experiment utils.
-# ========================================= #
+import torchvision
+from torch.utils.data import Dataset
+import numpy as np
+import os
+import json
+import random
+import subprocess
+import platform
+from datetime import datetime
 
 
-def setup_experiment(exp_dir, config, resume = False):
-  """Initializes a pretraining or RL experiment."""
-  # If the experiment directory doesn't exist yet, creates it and dumps the
-  # config dict as a yaml file and git hash as a text file.
-  # If it exists already, raises a ValueError to prevent overwriting
-  # unless resume is set to True.
-  if os.path.exists(exp_dir):
-    if not resume:
-      raise ValueError(
-          "Experiment already exists. Run with --resume to continue.")
-    load_config_from_dir(exp_dir, config)
-  else:
-    os.makedirs(exp_dir)
-    with open(os.path.join(exp_dir, "exp_config.yaml"), "w") as fp:
-      yaml.dump(ConfigDict.to_dict(config), fp)
-    fp.close()
-    with open(os.path.join(exp_dir, "git_hash.txt"), "w") as fp:
-      fp.write(git_revision_hash())
-    fp.close()
+class eval_mode(object):
+	def __init__(self, *models):
+		self.models = models
+
+	def __enter__(self):
+		self.prev_states = []
+		for model in self.models:
+			self.prev_states.append(model.training)
+			model.train(False)
+
+	def __exit__(self, *args):
+		for model, state in zip(self.models, self.prev_states):
+			model.train(state)
+		return False
 
 
-def load_config_from_dir(
-    exp_dir,
-    config = None,
-    rl = False
-):
-  """Load experiment config."""
-
-  if rl:
-    cfg = wandb.restore("exp_config.yaml", exp_dir)
-
-    with open("exp_config.yaml", "r") as fp:
-      cfg = yaml.load(fp, Loader=yaml.FullLoader)
-    fp.close()
-  
-  else:
-    with open(os.path.join(exp_dir, "exp_config.yaml"), "r") as fp:
-    # with open(os.path.join(exp_dir, "config.yaml"), "r") as fp:
-      cfg = yaml.load(fp, Loader=yaml.FullLoader)
-    fp.close()
-  # Inplace update the config if one is provided.
-  if config is not None:
-    config.update(cfg)
-    return
-  return ConfigDict(cfg)
+def soft_update_params(net, target_net, tau):
+	for param, target_param in zip(net.parameters(), target_net.parameters()):
+		target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
 
 
-def dump_config(exp_dir, config):
-  """Dump config to disk."""
-  # Note: No need to explicitly delete the previous config file as "w" will
-  # overwrite the file if it already exists.
-  with open(os.path.join(exp_dir, "exp_config.yaml"), "w") as fp:
-  # with open(os.path.join(exp_dir, "config.yaml"), "w") as fp:
-    yaml.dump(ConfigDict.to_dict(config), fp)
-  fp.close()
+def cat(x, y, axis=0):
+	return torch.cat([x, y], axis=0)
 
 
-def copy_config_and_replace(
-    config,
-    update_dict = None,
-    freeze = False,
-):
-  """Makes a copy of a config and optionally updates its values."""
-  # Using the ConfigDict constructor leaves the `FieldReferences` untouched
-  # unlike `ConfigDict.copy_and_resolve_references`.
-  new_config = ConfigDict(config)
-  if update_dict is not None:
-    new_config.update(update_dict)
-  if freeze:
-    return FrozenConfigDict(new_config)
-  return new_config
+def set_seed_everywhere(seed):
+	torch.manual_seed(seed)
+	if torch.cuda.is_available():
+		torch.cuda.manual_seed_all(seed)
+	np.random.seed(seed)
+	random.seed(seed)
+	# torch.backends.cudnn.deterministic = True
 
 
-def load_model_checkpoint(pretrained_path, device):
-  """Load a pretrained model and optionally a precomputed goal embedding."""
-  config = load_config_from_dir(pretrained_path, rl=True) # load config.yaml
-  model = common.get_model(config)
-  model.to(device).eval()
-
-  wandb.restore("8001.ckpt", pretrained_path)
-
-  checkpoint_dir = "./"
-  checkpoint_manager = CheckpointManager(checkpoint_dir, model=model)
-  global_step = checkpoint_manager.restore_or_initialize()
-  logging.info("Restored model from checkpoint %d.", global_step)
-  return config, model
+def write_info(args, fp):
+	data = {
+		'host': platform.node(),
+		'cwd': os.getcwd(),
+		'timestamp': str(datetime.now()),
+		'git': subprocess.check_output(["git", "describe", "--always"]).strip().decode(),
+		'args': vars(args)
+	}
+	with open(fp, 'w') as f:
+		json.dump(data, f, indent=4, separators=(',', ': '))
 
 
-def save_pickle(experiment_path, arr, name):
-  """Save an array as a pickle file."""
-  filename = os.path.join(experiment_path, name)
-  with open(filename, "wb") as fp:
-    pickle.dump(arr, fp)
-  fp.close()
-  logging.info("Saved %s to %s", name, filename)
+def load_config(key=None):
+	path = os.path.join('setup', 'config.cfg')
+	with open(path) as f:
+		data = json.load(f)
+	if key is not None:
+		return data[key]
+	return data
 
 
-def load_pickle(pretrained_path, name):
-  """Load a pickled array."""
-  wandb.restore(name, pretrained_path)
-  # filename = os.path.join(pretrained_path, name)
-  with open(name, "rb") as fp:
-    arr = pickle.load(fp)
-    time.sleep(1)
-  fp.close()
-  logging.info("Successfully loaded %s from %s", name, name)
-  return arr
+def make_dir(dir_path):
+	try:
+		os.makedirs(dir_path)
+	except OSError:
+		pass
+	return dir_path
 
 
-# ========================================= #
-# RL utils.
-# ========================================= #
+def prefill_memory(capacity, obs_shape):
+	obses = []
+	if len(obs_shape) > 1:
+		c,h,w = obs_shape
+		for _ in range(capacity):
+			if c==6:
+				frame = np.ones((6,h,w), dtype=np.uint8)
+			else:
+				frame = np.ones((3,h,w), dtype=np.uint8)
+			obses.append(frame)
+	else:
+		for _ in range(capacity):
+			obses.append(np.ones(obs_shape[0], dtype=np.float32))
+
+	return obses
 
 
-def make_env(
-    env_name,
-    seed,
-    save_dir = None,
-    add_episode_monitor = True,
-    action_repeat = 1,
-    frame_stack = 1,
-):
-  """Env factory with wrapping.
+class ReplayBuffer(Dataset):
+	"""Buffer to store environment transitions"""
+	def __init__(self, obs_shape, state_shape, action_shape, capacity, batch_size):
+		self.capacity = capacity
+		self.batch_size = batch_size
+		self.state_shape = state_shape
+		self._obses = prefill_memory(capacity, obs_shape)
+		if self.state_shape is not None:
+			self._states = prefill_memory(capacity, state_shape)
+		self.actions = np.empty((capacity, *action_shape), dtype=np.float32)
+		self.rewards = np.empty((capacity, 1), dtype=np.float32)
+		self.idx = 0
+		self.full = False
 
-  Args:
-    env_name: The name of the environment.
-    seed: The RNG seed.
-    save_dir: Specifiy a save directory to wrap with `VideoRecorder`.
-    add_episode_monitor: Set to True to wrap with `EpisodeMonitor`.
-    action_repeat: A value > 1 will wrap with `ActionRepeat`.
-    frame_stack: A value > 1 will wrap with `FrameStack`.
+	def __len__(self):
+		return self.capacity if self.full else self.idx
 
-  Returns:
-    gym.Env object.
-  """
-  # Check if the env is in x-magical.
-  xmagical.register_envs()
-  if env_name in xmagical.ALL_REGISTERED_ENVS:
-    env = gym.make(env_name)
-  else:
-    raise ValueError(f"{env_name} is not a valid environment name.")
+	def __getitem__(self, idx):
+		obs, next_obs = self._encode_obses(idx)
+		if self.state_shape is not None:
+			state, next_state = self._encode_states(idx)
+		obs = torch.as_tensor(obs).cuda().float()
+		if self.state_shape is not None:
+			state = torch.as_tensor(state).cuda().float()
+		next_obs = torch.as_tensor(next_obs).cuda().float()
+		if self.state_shape is not None:
+			next_state = torch.as_tensor(next_state).cuda().float()
+		actions = torch.as_tensor(self.actions[idx]).cuda()
+		rewards = torch.as_tensor(self.rewards[idx]).cuda()
 
-  if add_episode_monitor:
-    env = wrappers.EpisodeMonitor(env)
-  if action_repeat > 1:
-    env = wrappers.ActionRepeat(env, action_repeat)
-  env = RescaleAction(env, -1.0, 1.0)
-  if save_dir is not None:
-    env = wrappers.VideoRecorder(env, save_dir=save_dir)
-  if frame_stack > 1:
-    env = wrappers.FrameStack(env, frame_stack)
+		if self.state_shape is not None:
+			return obs, state, actions, rewards, next_obs, next_state
+		else:
+			return obs, None, actions, rewards, next_obs, None
 
-  # Seed.
-  env.seed(seed)
-  env.action_space.seed(seed)
-  env.observation_space.seed(seed)
+	def add(self, obs, state, action, reward, next_obs, next_state):
+		self._obses[self.idx] = (obs, next_obs)
+		if self.state_shape is not None:
+			self._states[self.idx] = (state, next_state)
+		np.copyto(self.actions[self.idx], action)
+		np.copyto(self.rewards[self.idx], reward)
+		self.idx = (self.idx + 1) % self.capacity
+		self.full = self.full or self.idx == 0
 
-  return env
+	def _get_idxs(self, n=None):
+		if n is None:
+			n = self.batch_size
+		return np.random.randint(0, len(self), size=n)
 
-def sigmoid(x, t = 1.0):
-  return 1 / (1 + math.exp(-x / t))
+	def _encode_obses(self, idxs):
+		obses, next_obses = zip(*[self._obses[i] for i in idxs])
+		return np.array(obses), np.array(next_obses)
 
-def wrap_learned_reward(env, config):
-  """Wrap the environment with a learned reward wrapper.
+	def _encode_states(self, idxs):
+		states, next_states = zip(*[self._states[i] for i in idxs])
+		return np.array(states), np.array(next_states)
 
-  Args:
-    env: A `gym.Env` to wrap with a `LearnedVisualRewardWrapper` wrapper.
-    config: RL config dict, must inherit from base config defined in
-      `configs/rl_default.py`.
+	def sample_drq(self, n=None, pad=4):
+		raise NotImplementedError('call sample() and apply aug in the agent.update() instead')
 
-  Returns:
-    gym.Env object.
-  """
-  pretrained_path = config.reward_wrapper.pretrained_path
-  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-  model_config, model = load_model_checkpoint(pretrained_path, device)
+	def sample(self, n=None):
+		idxs = self._get_idxs(n)
+		return self[idxs]
+		
 
-  kwargs = {
-      "env": env,
-      "model": model,
-      "device": device,
-      "res_hw": model_config.data_augmentation.image_size,
-  }
+class LazyFrames(object):
+	def __init__(self, frames, extremely_lazy=True):
+		self._frames = frames
+		self._extremely_lazy = extremely_lazy
+		self._out = None
 
-  if config.reward_wrapper.type == "goal_classifier":
-    env = wrappers.GoalClassifierLearnedVisualReward(**kwargs)
+	@property
+	def frames(self):
+		return self._frames
 
-  elif config.reward_wrapper.type == "distance_to_goal":
-    kwargs["goal_emb"] = load_pickle(pretrained_path, "goal_emb.pkl")
-    kwargs["distance_scale"] = load_pickle(pretrained_path,
-                                           "distance_scale.pkl")
-    env = wrappers.DistanceToGoalLearnedVisualReward(**kwargs)
-  
-  elif config.reward_wrapper.type == "distance_to_goal_bbox":
-    kwargs["goal_emb"] = model.goal_emb
-    kwargs["distance_scale"] = model.distance_scale
-    if config.reward_wrapper.distance_func == "sigmoid":
-      kwargs["distance_func"] = functools.partial(
-          sigmoid,
-          config.reward_wrapper.distance_func_temperature,
-      )
+	def _force(self):
+		if self._extremely_lazy:
+			return np.concatenate(self._frames, axis=0)
+		if self._out is None:
+			self._out = np.concatenate(self._frames, axis=0)
+			self._frames = None
+		return self._out
 
-    kwargs["state_dims"] = config.state_dims
-    kwargs["embodiment"] = config.embodiment.capitalize()
-    env = DistanceToGoalBboxReward(**kwargs)
+	def __array__(self, dtype=None):
+		out = self._force()
+		if dtype is not None:
+			out = out.astype(dtype)
+		return out
 
-  else:
-    raise ValueError(
-        f"{config.reward_wrapper.type} is not a valid reward wrapper.")
+	def __len__(self):
+		if self._extremely_lazy:
+			return len(self._frames)
+		return len(self._force())
 
-  return env
+	def __getitem__(self, i):
+		return self._force()[i]
 
+	def count(self):
+		if self.extremely_lazy:
+			return len(self._frames)
+		frames = self._force()
+		return frames.shape[0]//3
 
-def make_buffer(
-    env,
-    device,
-    config,
-):
-  """Replay buffer factory.
-
-  Args:
-    env: A `gym.Env`.
-    device: A `torch.device` object.
-    config: RL config dict, must inherit from base config defined in
-      `configs/rl_default.py`.
-
-  Returns:
-    ReplayBuffer.
-  """
-
-  kwargs = {
-      "obs_shape": env.observation_space.shape,
-      "action_shape": env.action_space.shape,
-      "capacity": config.replay_buffer_capacity,
-      "device": device,
-  }
-
-  pretrained_path = config.reward_wrapper.pretrained_path # pretrained_path == run_path from wandb
-
-  if not pretrained_path:
-    return replay_buffer.ReplayBuffer(**kwargs)
-
-  model_config, model = load_model_checkpoint(pretrained_path, device)
-  kwargs["model"] = model
-  kwargs["res_hw"] = model_config.data_augmentation.image_size
-
-  if config.reward_wrapper.type == "goal_classifier":
-    buffer = replay_buffer.ReplayBufferGoalClassifier(**kwargs)
-
-  elif config.reward_wrapper.type == "distance_to_goal":
-    kwargs["goal_emb"] = load_pickle(pretrained_path, "goal_emb.pkl")
-    kwargs["distance_scale"] = load_pickle(pretrained_path,
-                                           "distance_scale.pkl")
-    buffer = replay_buffer.ReplayBufferDistanceToGoal(**kwargs)
-
-  else:
-    raise ValueError(
-        f"{config.reward_wrapper.type} is not a valid reward wrapper.")
-
-  return buffer
+	def frame(self, i):
+		return self._force()[i*3:(i+1)*3]
 
 
-# ========================================= #
-# Misc. utils.
-# ========================================= #
+def count_parameters(net, as_int=False):
+	"""Returns number of params in network"""
+	count = sum(p.numel() for p in net.parameters())
+	if as_int:
+		return count
+	return f'{count:,}'
 
 
-def plot_reward(rews):
-  """Plot raw and cumulative rewards over an episode."""
-  _, axes = plt.subplots(1, 2, figsize=(12, 4), sharex=True)
-  axes[0].plot(rews)
-  axes[0].set_xlabel("Timestep")
-  axes[0].set_ylabel("Reward")
-  axes[1].plot(np.cumsum(rews))
-  axes[1].set_xlabel("Timestep")
-  axes[1].set_ylabel("Cumulative Reward")
-  for ax in axes:
-    ax.grid(b=True, which="major", linestyle="-")
-    ax.grid(b=True, which="minor", linestyle="-", alpha=0.2)
-  plt.minorticks_on()
-  plt.show()
+def save_obs(obs, fname='obs', resize_factor=None):
+	if isinstance(obs, torch.Tensor):
+		obs = obs.detach().cpu()
+	elif isinstance(obs, LazyFrames):
+		obs = torch.FloatTensor(np.array(obs))
+	else:
+		obs = torch.FloatTensor(obs)
+	assert obs.ndim == 3, 'expected observation of shape (C, H, W)'
+	c,h,w = obs.shape
+	if resize_factor is not None:
+		obs = torchvision.transforms.functional.resize(obs, size=(h*resize_factor, w*resize_factor))
+	if c == 3:
+		torchvision.utils.save_image(obs/255., fname+'.png')
+	elif c == 9:
+		grid = torch.stack([obs[i*3:(i+1)*3] for i in range(3)], dim=0)
+		grid = torchvision.utils.make_grid(grid, nrow=3)
+		torchvision.utils.save_image(grid/255., fname+'.png')
+	else:
+		raise NotImplementedError('save_obs does not support other number of channels than 3 or 9')

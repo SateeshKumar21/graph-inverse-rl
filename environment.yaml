@@ -26,3 +26,12 @@ dependencies:
     - protobuf~=3.19.0
     - wandb
     - natsort
+    - pillow==6.2.0
+    - termcolor
+    - opencv-python
+    - xmltodict
+    - scikit-image
+    - seaborn
+    - mujoco-py
+    - kornia
+    - einops

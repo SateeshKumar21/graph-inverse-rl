@@ -1,6 +1,6 @@
 # Graph Inverse Reinforcement Learning
 
-(In-Progress) Original PyTorch implementation of **GraphIRL** from
+Original PyTorch implementation of **GraphIRL** from
 
 [Graph Inverse Reinforcement Learning from Diverse Videos](https://arxiv.org/abs/2207.14299) by
 
@@ -10,7 +10,7 @@ Conference on Robot Learning (CoRL), 2022 **(Oral, Top 6.5%)**
 
 <p align="center">
   <br><img src='media/preview.gif' width="600"/><br>
-   <a href="https://arxiv.org/abs/2207.14299">[Paper]</a>&emsp;<a href="https://sateeshkumar21.github.io/GraphIRL">[Website]</a>&emsp;<a href="https://youtu.be/hDxhmcwMFto">[Video]</a>&emsp;<a href="https://github.com/SateeshKumar21/graph-inverse-rl">[Dataset]</a>
+   <a href="https://arxiv.org/abs/2207.14299">[Paper]</a>&emsp;<a href="https://sateeshkumar21.github.io/GraphIRL">[Website]</a>&emsp;<a href="https://youtu.be/hDxhmcwMFto">[Video]</a>&emsp;<a href="https://drive.google.com/drive/folders/1mNJmnyzIoCudRcTdRVrN3WAiuWIM8355?usp=share_link">[Dataset]</a>
 </p>
 
 
@@ -38,20 +38,29 @@ If you use our method or code in your research, please consider citing the paper
 
 ## Instructions
 
-We assume you have installed [MuJoCo](http://www.mujoco.org) on your machine. You can install dependencies using `conda` and our `install_env.sh` script:
+We assume you have installed [MuJoCo](http://www.mujoco.org) on your machine. You can install dependencies using `conda`:
 
 ```
 conda env create -f environment.yaml
 conda activate graphirl
-bash scripts/install_env.sh
 ```
 
-After installing dependencies, you can learn a reward function and train a policy by running:
+Then, to download the data, run:
 
 ```
-bash scripts/train_reward.sh
-bash scripts/train_policy.sh
+bash scripts/download_data.sh
 ```
+
+Finally, you can use trained models to extract the reward and train a policy by running:
+
+```
+bash scripts/run_${Task_Name} /path/to/trained_model
+```
+
+## Dataset
+
+The dataset for GraphIRL can be found in this [Google Drive Folder](https://drive.google.com/drive/folders/1mNJmnyzIoCudRcTdRVrN3WAiuWIM8355?usp=share_link). We have also released the trained reward models for Reach, Push and Peg in Box [here](https://drive.google.com/drive/folders/1O69YtAmq7hqU6kmutqGr-I0vBo7bu8f3?usp=sharing).
+We include a [script](scripts/download_data.sh) for downloading all data with the `gdown` package, though feel free to directly download the files from our drive folder if you run into issues with the script.
 
 ##  License & Acknowledgements
 

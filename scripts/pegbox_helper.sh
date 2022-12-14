@@ -1,0 +1,34 @@
+export MUJOCO_GL=egl
+python3 src/train.py \
+  --algorithm ${12} \
+  --domain_name robot \
+  --task_name $1 \
+  --episode_length 50 \
+  --exp_suffix ${11} \
+  --eval_mode none \
+  --save_video \
+  --eval_freq 10k \
+  --train_steps 1500k \
+  --buffer_size 500k \
+  --save_freq 50k \
+  --frame_stack 1 \
+  --log_dir /data/sateesh/logs_pegbox_graphirl \
+  --eval_episodes 50 \
+  --image_size 84 \
+  --render_image_size 84 \
+  --seed $4 \
+  --cameras $2 \
+  --camera_dropout $3 \
+  --action_space $5 \
+  --attention $7 \
+  --num_head_layers $6 \
+  --concat $8 \
+  --observation_type ${13} \
+  --context1 $9 \
+  --context2 ${10} \
+  --wandb_project pegbox_graphirl \
+  --save_video \
+  --pretrained_path {15} \
+  --reward_wrapper gil_pegbox  \
+  --apply_wrapper \
+  --wandb 
