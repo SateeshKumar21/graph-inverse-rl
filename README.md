@@ -45,13 +45,7 @@ conda env create -f environment.yaml
 conda activate graphirl
 ```
 
-Then, to download the data, run:
-
-```
-bash scripts/download_data.sh
-```
-
-Finally, you can use trained models to extract the reward and train a policy by running:
+You can use trained models to extract the reward and train a policy by running:
 
 ```
 bash scripts/run_${Task_Name} /path/to/trained_model
